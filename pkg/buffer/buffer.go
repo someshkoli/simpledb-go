@@ -15,12 +15,12 @@ type Buffer struct {
 	lsn         int
 }
 
-func NewBuffer(fm *fs.FileManager, lm *log.LogManager, contents *fs.Page, blk *fs.BlockId) *Buffer {
+func NewBuffer(fm *fs.FileManager, lm *log.LogManager) *Buffer {
 	return &Buffer{
 		filemanager: fm,
 		logManager:  lm,
-		contents:    contents,
-		blk:         blk,
+		contents:    fs.NewPageFromBlkSize(fm.BlkSize),
+		blk:         nil,
 		pins:        0,
 		txnNumber:   -1,
 		lsn:         -1,
