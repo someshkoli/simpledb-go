@@ -16,7 +16,7 @@ const BLOCK_WRITE = "block_write"
 
 type FileManager struct {
 	dbDirectory string
-	blkSize     int
+	BlkSize     int
 	IsNew       bool
 	stats       *metrics.InternalStatistics
 }
@@ -41,7 +41,7 @@ func NewFileManager(dbDirectory string, blkSize int) *FileManager {
 
 	return &FileManager{
 		dbDirectory: dbDirectory,
-		blkSize:     int(blkSize),
+		BlkSize:     int(blkSize),
 		IsNew:       isNew,
 		stats:       metrics.NewInternalStatistics("filemanager"),
 	}
@@ -54,7 +54,7 @@ func (fm *FileManager) Read(blk *BlockId, p *Page) error {
 	}
 	defer f.Close()
 
-	offset := blk.blknum * fm.blkSize
+	offset := blk.blknum * fm.BlkSize
 	f.Seek(int64(offset), 0)
 	f.Read(p.buffer())
 	fm.stats.Increment(BLOCK_READ, 1)
@@ -69,7 +69,7 @@ func (fm *FileManager) Write(blk *BlockId, p *Page) error {
 	}
 	defer f.Close()
 
-	offset := blk.blknum * fm.blkSize
+	offset := blk.blknum * fm.BlkSize
 	_, err = f.WriteAt(p.buffer(), int64(offset))
 	if err != nil {
 		return err
@@ -85,7 +85,7 @@ func (fm *FileManager) Append(filename string) (*BlockId, error) {
 		return nil, err
 	}
 
-	newBlkNum := f.Size() / int64(fm.blkSize)
+	newBlkNum := f.Size() / int64(fm.BlkSize)
 	blk := NewBlockId(filename, int(newBlkNum))
 
 	nf, err := os.OpenFile(filename, os.O_RDWR, 0644)
@@ -95,7 +95,7 @@ func (fm *FileManager) Append(filename string) (*BlockId, error) {
 	defer nf.Close()
 
 	nf.Seek(f.Size(), 0)
-	nf.Write(make([]byte, fm.blkSize))
+	nf.Write(make([]byte, fm.BlkSize))
 	fm.stats.Increment(BLOCK_WRITE, 1)
 
 	return blk, nil
@@ -108,7 +108,7 @@ func (fm *FileManager) Length(filename string) (int, error) {
 	}
 	fm.stats.Increment(FILE_STAT_READ, 1)
 
-	return int(f.Size()) / fm.blkSize, nil
+	return int(f.Size()) / fm.BlkSize, nil
 }
 
 func (fm *FileManager) Stats() map[string]int {

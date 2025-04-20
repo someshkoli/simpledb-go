@@ -32,6 +32,13 @@ func (b *BlockId) HashCode() uint32 {
 	h.Write([]byte(b.ToString()))
 	return h.Sum32()
 }
+func (b *BlockId) Number() int {
+	return b.blknum
+}
+
+func (b *BlockId) FileName() string {
+	return b.filename
+}
 
 type Page struct {
 	bb bytes.Buffer
@@ -70,27 +77,27 @@ func (p *Page) SetInt(offset int64, n int64) {
 	copy(p.buffer()[offset:offset+INT64_SIZE], buf)
 }
 
-func (p *Page) getBytes(offset int64) []byte {
+func (p *Page) GetBytes(offset int64) []byte {
 	n := p.GetInt(offset)
 	offset = offset + INT64_SIZE
 	return p.buffer()[offset : offset+n]
 }
 
-func (p *Page) setBytes(offset int64, b []byte) {
+func (p *Page) SetBytes(offset int64, b []byte) {
 	p.SetInt(offset, int64(len(b)))
 	offset = offset + INT64_SIZE
 	copy(p.buffer()[offset:offset+int64(len(b))], b)
 }
 
 func (p *Page) GetString(offset int64) string {
-	return string(p.getBytes(offset))
+	return string(p.GetBytes(offset))
 }
 
 func (p *Page) SetString(offset int64, s string) {
-	p.setBytes(offset, []byte(s))
+	p.SetBytes(offset, []byte(s))
 }
 
 func MaxLength(strlen int) int {
-	// implmeennt character set here
+	// implmennt character set here
 	return INT64_SIZE + strlen
 }

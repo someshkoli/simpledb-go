@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewFilemanager(t *testing.T) {
-	dbDirectory := "./test-db"
+	dbDirectory := "../../test-db"
 	NewFileManager(dbDirectory, 64)
 
 	_, err := os.Stat(dbDirectory)
@@ -20,7 +20,7 @@ func TestReadWrite(t *testing.T) {
 	fm := NewFileManager(dbDirectory, 128)
 
 	blk := NewBlockId("testfile", 0)
-	p1 := NewPageFromBlkSize(fm.blkSize)
+	p1 := NewPageFromBlkSize(fm.BlkSize)
 
 	pos1 := 88
 	s := "abcdefghijkl"
@@ -35,7 +35,7 @@ func TestReadWrite(t *testing.T) {
 	err := fm.Write(blk, p1)
 	assert.NilError(t, err)
 
-	p2 := NewPageFromBlkSize(fm.blkSize)
+	p2 := NewPageFromBlkSize(fm.BlkSize)
 	fm.Read(blk, p2)
 
 	assert.Equal(t, int64(n), p2.GetInt(int64(pos2)))
