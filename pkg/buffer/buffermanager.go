@@ -5,6 +5,7 @@ import (
 
 	"github.com/someshkoli/simpledb-go/pkg/fs"
 	"github.com/someshkoli/simpledb-go/pkg/log"
+	"github.com/someshkoli/simpledb-go/pkg/metrics"
 	"github.com/someshkoli/simpledb-go/pkg/utils/observer"
 )
 
@@ -13,6 +14,7 @@ type BufferManager struct {
 	numAvailable int
 	maxTime      int
 	observers    []observer.Observer
+	stats        *metrics.InternalStatistics
 }
 
 func NewBufferManager(fm *fs.FileManager, lm *log.LogManager, bufPoolSize int, maxTime int) *BufferManager {
@@ -24,7 +26,12 @@ func NewBufferManager(fm *fs.FileManager, lm *log.LogManager, bufPoolSize int, m
 		buffer:       pool,
 		numAvailable: bufPoolSize,
 		maxTime:      maxTime,
+		stats:        metrics.NewInternalStatistics("bufferManager"),
 	}
+}
+
+func (fm *BufferManager) Stats() map[string]int {
+	return fm.stats.Get()
 }
 
 func (bm *BufferManager) RegisterObserver(ob observer.Observer) {

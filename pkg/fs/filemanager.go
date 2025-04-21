@@ -112,7 +112,5 @@ func (fm *FileManager) Length(filename string) (int, error) {
 }
 
 func (fm *FileManager) Stats() map[string]int {
-	fm.stats.Increment(FILE_STAT_READ, 1)
-
 	return fm.stats.Get()
 }

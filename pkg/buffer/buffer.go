@@ -3,6 +3,7 @@ package buffer
 import (
 	"github.com/someshkoli/simpledb-go/pkg/fs"
 	"github.com/someshkoli/simpledb-go/pkg/log"
+	"github.com/someshkoli/simpledb-go/pkg/metrics"
 )
 
 type Buffer struct {
@@ -13,6 +14,7 @@ type Buffer struct {
 	pins        int
 	txnNumber   int
 	lsn         int
+	stats       *metrics.InternalStatistics
 }
 
 func NewBuffer(fm *fs.FileManager, lm *log.LogManager) *Buffer {
@@ -24,6 +26,7 @@ func NewBuffer(fm *fs.FileManager, lm *log.LogManager) *Buffer {
 		pins:        0,
 		txnNumber:   -1,
 		lsn:         -1,
+		stats:       metrics.NewInternalStatistics("buffer"),
 	}
 }
 
