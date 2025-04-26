@@ -6,27 +6,27 @@ import (
 	"github.com/someshkoli/simpledb-go/pkg/fs"
 	"github.com/someshkoli/simpledb-go/pkg/log"
 	"github.com/someshkoli/simpledb-go/pkg/metrics"
-	"github.com/someshkoli/simpledb-go/pkg/utils/observer"
 )
 
 type BufferManager struct {
-	buffer       []Buffer
-	numAvailable int
-	maxTime      int
-	observers    []observer.Observer
-	stats        *metrics.InternalStatistics
+	buffers         []Buffer
+	numAvailable    int
+	maxTime         time.Duration
+	stats           *metrics.InternalStatistics
+	freeBufNotifier chan (int)
 }
 
-func NewBufferManager(fm *fs.FileManager, lm *log.LogManager, bufPoolSize int, maxTime int) *BufferManager {
+func NewBufferManager(fm *fs.FileManager, lm *log.LogManager, bufPoolSize int, maxTime time.Duration) *BufferManager {
 	pool := make([]Buffer, bufPoolSize)
 	for n := range bufPoolSize {
 		pool[n] = *NewBuffer(fm, lm)
 	}
 	return &BufferManager{
-		buffer:       pool,
-		numAvailable: bufPoolSize,
-		maxTime:      maxTime,
-		stats:        metrics.NewInternalStatistics("bufferManager"),
+		buffers:         pool,
+		numAvailable:    bufPoolSize,
+		maxTime:         maxTime,
+		stats:           metrics.NewInternalStatistics("bufferManager"),
+		freeBufNotifier: make(chan int),
 	}
 }
 
@@ -34,42 +34,32 @@ func (fm *BufferManager) Stats() map[string]int {
 	return fm.stats.Get()
 }
 
-func (bm *BufferManager) RegisterObserver(ob observer.Observer) {
-	bm.observers = append(bm.observers, ob)
-}
-
-func (bm *BufferManager) DeregisterObserver(ob observer.Observer) {
-	for i, o := range bm.observers {
-		if ob.GetId() == o.GetId() {
-			bm.observers[i] = bm.observers[len(bm.observers)-1]
-			bm.observers = bm.observers[:len(bm.observers)-1]
-		}
-	}
-}
-
-func (bm *BufferManager) notifyAllObserver() {
-	for _, o := range bm.observers {
-		o.Update()
-	}
-}
-
 func (bm *BufferManager) Available() int {
 	return bm.numAvailable
 }
 
 func (bm *BufferManager) FlushAll(txnNum int) {
-	for i, b := range bm.buffer {
+	for i, b := range bm.buffers {
 		if b.ModifyingTxn() == txnNum {
 			b.flush()
 		}
 	}
 }
 
+func (bm *BufferManager) findBufferIndex(buff *Buffer) int {
+	for n, buff := range bm.buffers {
+		if buff.blk.Equals(buff.blk) {
+			return n
+		}
+	}
+	return -1
+}
+
 func (bm *BufferManager) Unpin(buff *Buffer) {
 	buff.UnPin()
 	if !buff.IsPinned() {
 		bm.numAvailable = bm.numAvailable + 1
-		bm.notifyAllObserver()
+		bm.freeBufNotifier <- bm.findBufferIndex(buff)
 	}
 }
 
@@ -78,13 +68,25 @@ func (bm *BufferManager) waitingTooLong(startTime time.Time) bool {
 }
 
 func (bm *BufferManager) Pin(blk *fs.BlockId) *Buffer {
-	now := time.Now()
 	buff := bm.tryToPin(blk)
-	for buff != nil && !bm.waitingTooLong(now) {
-		// (bm.maxTime) // accept notification
-		// use channels instead of observers
+	ticker := time.NewTicker(bm.maxTime)
+	if buff != nil {
+		return buff
 	}
-
+	select {
+	case <-ticker.C:
+		return nil
+	case bno := <-bm.freeBufNotifier:
+		b := bm.buffers[bno]
+		b.Lock()
+		defer b.Unlock()
+		if !b.IsPinned() {
+			b.Pin()
+			b.AssignToBlock(blk)
+			return &b
+		}
+	}
+	return nil
 }
 
 func (bm *BufferManager) tryToPin(blk *fs.BlockId) *Buffer {
@@ -105,7 +107,7 @@ func (bm *BufferManager) tryToPin(blk *fs.BlockId) *Buffer {
 }
 
 func (bm *BufferManager) findExistingBuffer(blk *fs.BlockId) *Buffer {
-	for _, b := range bm.buffer {
+	for _, b := range bm.buffers {
 		blk := b.blk
 		if blk != nil && blk.Equals(blk) {
 			return &b
@@ -115,7 +117,7 @@ func (bm *BufferManager) findExistingBuffer(blk *fs.BlockId) *Buffer {
 }
 
 func (bm *BufferManager) chooseUnpinnedBuffer() *Buffer {
-	for _, b := range bm.buffer {
+	for _, b := range bm.buffers {
 		if !b.IsPinned() {
 			return &b
 		}

@@ -1,12 +1,15 @@
 package buffer
 
 import (
+	"sync"
+
 	"github.com/someshkoli/simpledb-go/pkg/fs"
 	"github.com/someshkoli/simpledb-go/pkg/log"
 	"github.com/someshkoli/simpledb-go/pkg/metrics"
 )
 
 type Buffer struct {
+	*sync.Mutex
 	filemanager *fs.FileManager
 	logManager  *log.LogManager
 	contents    *fs.Page
