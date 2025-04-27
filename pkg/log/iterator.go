@@ -4,10 +4,12 @@ import "github.com/someshkoli/simpledb-go/pkg/fs"
 
 type LogIterator struct {
 	fileManager *fs.FileManager
-	blk         *fs.BlockId
-	p           *fs.Page
-	currentPos  int
-	boundary    int
+	// use buffer page instead of this because same page might already
+	// be present in existing buffer.
+	blk        *fs.BlockId
+	p          *fs.Page
+	currentPos int
+	boundary   int
 }
 
 func moveToBlock(fm *fs.FileManager, blk *fs.BlockId, p *fs.Page) (int, int) {

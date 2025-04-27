@@ -39,7 +39,7 @@ func (bm *BufferManager) Available() int {
 }
 
 func (bm *BufferManager) FlushAll(txnNum int) {
-	for i, b := range bm.buffers {
+	for _, b := range bm.buffers {
 		if b.ModifyingTxn() == txnNum {
 			b.flush()
 		}

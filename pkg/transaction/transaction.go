@@ -13,7 +13,7 @@ type TransactionManager struct {
 }
 
 func NewTransactionManager(fm *fs.FileManager, lm *log.LogManager, bm *buffer.BufferManager) *TransactionManager {
-
+	return nil
 }
 
 func (tm *TransactionManager) Commit() {

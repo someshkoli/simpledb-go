@@ -67,7 +67,7 @@ func (c *CommitLogRecord) ToString() string {
 	return fmt.Sprintf("<COMMIT %d>", c.txnNumber)
 }
 
-func (c *CommitLogRecord) WriteToLog(lm *log.LogManager, txnNumber int) int {
+func (c CommitLogRecord) WriteToLog(lm *log.LogManager, txnNumber int) int {
 	tpos := fs.INT64_SIZE
 	recLen := fs.MaxLength(tpos)
 	rec := make([]byte, recLen)
@@ -79,7 +79,8 @@ func (c *CommitLogRecord) WriteToLog(lm *log.LogManager, txnNumber int) int {
 
 type SetStringLogRecord struct {
 	txnNumber int
-	val       string
+	val       []byte
+	oldVal    []byte
 	blk       *fs.BlockId
 	offset    int
 }
@@ -95,10 +96,13 @@ func NewSetStringLogRecord(p *fs.Page) SetStringLogRecord {
 	opos := bpos + fs.INT64_SIZE
 	offset := p.GetInt(int64(opos))
 	vpos := opos + fs.INT64_SIZE
-	val := p.GetString(int64(vpos))
+	val := p.GetBytes(int64(vpos))
+	ovpos := vpos + fs.MaxLength(len(val))
+	oldVal := p.GetBytes(int64(ovpos))
 	return SetStringLogRecord{
 		txnNumber: int(txnNumber),
 		val:       val,
+		oldVal:    oldVal,
 		blk:       blk,
 		offset:    int(offset),
 	}
@@ -113,7 +117,14 @@ func (lr *SetStringLogRecord) TxnNumber() int {
 }
 
 func (lr *SetStringLogRecord) ToString() string {
-	return fmt.Sprintf("<SETSTRING %d %d %d %s>", lr.txnNumber, lr.blk.Number(), lr.offset, lr.val)
+	return fmt.Sprintf(
+		"<SETSTRING %d %d %d %s %s>",
+		lr.txnNumber,
+		lr.blk.Number(),
+		lr.offset,
+		fs.NewPageFromBytes(lr.oldVal).GetString(int64(lr.offset)),
+		fs.NewPageFromBytes(lr.val).GetString(int64(lr.offset)),
+	)
 }
 
 // needs transaction to be implemented
@@ -121,13 +132,14 @@ func (lr *SetStringLogRecord) Undo() {
 
 }
 
-func (lr *SetStringLogRecord) WriteToLog(lm *log.LogManager, txnNum int, blk *fs.BlockId, offset int, val string) int {
+func (lr *SetStringLogRecord) WriteToLog(lm *log.LogManager, txnNum int, blk *fs.BlockId, offset int, val []byte, oldVal []byte) int {
 	tpos := fs.INT64_SIZE
 	fpos := tpos + fs.INT64_SIZE
 	bpos := fpos + fs.MaxLength(len(blk.FileName()))
 	opos := bpos + fs.INT64_SIZE
-	vpos := bpos + opos + fs.INT64_SIZE
-	recLen := vpos + fs.MaxLength(len(val))
+	vpos := opos + fs.INT64_SIZE
+	ovpos := vpos + fs.MaxLength(len(val))
+	recLen := vpos + fs.MaxLength(len(oldVal))
 	rec := make([]byte, recLen)
 	p := fs.NewPageFromBytes(rec)
 	p.SetInt(0, int64(SETSTRING))
@@ -135,7 +147,8 @@ func (lr *SetStringLogRecord) WriteToLog(lm *log.LogManager, txnNum int, blk *fs
 	p.SetString(int64(fpos), blk.FileName())
 	p.SetInt(int64(bpos), int64(blk.Number()))
 	p.SetInt(int64(opos), int64(offset))
-	p.SetString(int64(vpos), val)
+	p.SetBytes(int64(vpos), val)
+	p.SetBytes(int64(ovpos), oldVal)
 	return lm.Append(rec)
 }
 
@@ -170,7 +183,7 @@ func (lr *StartLogRecord) ToString() string {
 }
 
 // Method to write a StartLogRecord to the log
-func (lr *StartLogRecord) WriteToLog(lm *log.LogManager, txnNumber int) int {
+func (lr StartLogRecord) WriteToLog(lm *log.LogManager, txnNumber int) int {
 	tpos := fs.INT64_SIZE
 	recLen := tpos + fs.INT64_SIZE
 	rec := make([]byte, recLen)
@@ -184,7 +197,8 @@ type SetIntLogRecord struct {
 	txnNumber int
 	blk       *fs.BlockId
 	offset    int
-	val       int
+	val       []byte
+	oldVal    []byte
 }
 
 // Constructor for SetIntLogRecord
@@ -199,12 +213,15 @@ func NewSetIntLogRecord(p *fs.Page) SetIntLogRecord {
 	opos := bpos + fs.INT64_SIZE
 	offset := p.GetInt(int64(opos))
 	vpos := opos + fs.INT64_SIZE
-	val := p.GetInt(int64(vpos))
+	val := p.GetBytes(int64(vpos))
+	ovPos := vpos + fs.MaxLength(len(val))
+	oldVal := p.GetBytes(int64(ovPos))
 	return SetIntLogRecord{
 		txnNumber: int(txnNumber),
 		blk:       blk,
 		offset:    int(offset),
-		val:       int(val),
+		val:       val,
+		oldVal:    oldVal,
 	}
 }
 
@@ -223,17 +240,25 @@ func (lr *SetIntLogRecord) Undo(txnNumber int) {
 }
 
 func (lr *SetIntLogRecord) ToString() string {
-	return fmt.Sprintf("<SETINT %d %d %d %d>", lr.txnNumber, lr.blk.Number(), lr.offset, lr.val)
+	return fmt.Sprintf(
+		"<SETINT %d %d %d %d %d>",
+		lr.txnNumber,
+		lr.blk.Number(),
+		lr.offset,
+		fs.NewPageFromBytes(lr.oldVal).GetInt(int64(lr.offset)),
+		fs.NewPageFromBytes(lr.val).GetInt(int64(lr.offset)),
+	)
 }
 
 // Method to write a SetIntLogRecord to the log
-func (lr *SetIntLogRecord) WriteToLog(lm *log.LogManager, txnNum int, blk *fs.BlockId, offset int, val int) int {
+func (lr *SetIntLogRecord) WriteToLog(lm *log.LogManager, txnNum int, blk *fs.BlockId, offset int, val []byte, oldVal []byte) int {
 	tpos := fs.INT64_SIZE
 	fpos := tpos + fs.INT64_SIZE
 	bpos := fpos + fs.MaxLength(len(blk.FileName()))
 	opos := bpos + fs.INT64_SIZE
 	vpos := opos + fs.INT64_SIZE
-	recLen := vpos + fs.INT64_SIZE
+	ovpos := opos + fs.MaxLength(len(val))
+	recLen := vpos + fs.MaxLength(len(oldVal))
 	rec := make([]byte, recLen)
 	p := fs.NewPageFromBytes(rec)
 	p.SetInt(0, int64(SETINT))
@@ -241,6 +266,105 @@ func (lr *SetIntLogRecord) WriteToLog(lm *log.LogManager, txnNum int, blk *fs.Bl
 	p.SetString(int64(fpos), blk.FileName())
 	p.SetInt(int64(bpos), int64(blk.Number()))
 	p.SetInt(int64(opos), int64(offset))
-	p.SetInt(int64(vpos), int64(val))
+	p.SetBytes(int64(vpos), val)
+	p.SetBytes(int64(ovpos), oldVal)
+	return lm.Append(rec)
+}
+
+type RollbackLogRecord struct {
+	txnNumber int
+}
+
+func NewRollbackLogRecord(p *fs.Page) RollbackLogRecord {
+	tpos := fs.INT64_SIZE
+	txnNumber := p.GetInt(int64(tpos))
+	return RollbackLogRecord{
+		txnNumber: int(txnNumber),
+	}
+}
+
+func (r *RollbackLogRecord) Op() LogType {
+	return ROLLBACK
+}
+
+func (r *RollbackLogRecord) TxnNumber() int {
+	return r.txnNumber
+}
+
+func (r *RollbackLogRecord) Undo(txnNumber int) {
+	// ROLLBACK log records typically do not require undo logic
+	return
+}
+
+func (r *RollbackLogRecord) ToString() string {
+	return fmt.Sprintf("<ROLLBACK %d>", r.txnNumber)
+}
+
+func (r RollbackLogRecord) WriteToLog(lm *log.LogManager, txnNumber int) int {
+	tpos := fs.INT64_SIZE
+	recLen := fs.MaxLength(tpos)
+	rec := make([]byte, recLen)
+	p := fs.NewPageFromBytes(rec)
+	p.SetInt(0, int64(ROLLBACK))
+	p.SetInt(int64(tpos), int64(txnNumber))
+	return lm.Append(rec)
+}
+
+// this is a type of Non quiescent checkpoint which avoid database blocking
+// while the recovery manager waits for existing transactions to complete.
+type CheckpointLogRecord struct {
+	activeTxns []int
+}
+
+// Constructor for CheckpointLogRecord
+func NewCheckpointLogRecord(p *fs.Page) CheckpointLogRecord {
+	tpos := fs.INT64_SIZE
+	numTxns := p.GetInt(int64(tpos)) // Number of active transactions
+	tpos += fs.INT64_SIZE
+
+	activeTxns := make([]int, numTxns)
+	for i := 0; i < int(numTxns); i++ {
+		activeTxns[i] = int(p.GetInt(int64(tpos)))
+		tpos += fs.INT64_SIZE
+	}
+
+	return CheckpointLogRecord{
+		activeTxns: activeTxns,
+	}
+}
+
+func (c *CheckpointLogRecord) Op() LogType {
+	return CHECKPOINT
+}
+
+func (c *CheckpointLogRecord) TxnNumber() int {
+	// Checkpoint does not have a single transaction number
+	return -1
+}
+
+func (c *CheckpointLogRecord) Undo(txnNumber int) {
+	// Checkpoint log records do not require undo logic
+	return
+}
+
+func (c *CheckpointLogRecord) ToString() string {
+	return fmt.Sprintf("<CHECKPOINT %v>", c.activeTxns)
+}
+
+func (c CheckpointLogRecord) WriteToLog(lm *log.LogManager, activeTxns []int) int {
+	tpos := fs.INT64_SIZE
+	recLen := tpos + fs.INT64_SIZE + len(activeTxns)*fs.INT64_SIZE
+	rec := make([]byte, recLen)
+	p := fs.NewPageFromBytes(rec)
+
+	p.SetInt(0, int64(CHECKPOINT)) // Log type
+	p.SetInt(int64(tpos), int64(len(activeTxns)))
+	tpos += fs.INT64_SIZE
+
+	for _, txn := range activeTxns {
+		p.SetInt(int64(tpos), int64(txn))
+		tpos += fs.INT64_SIZE
+	}
+
 	return lm.Append(rec)
 }
